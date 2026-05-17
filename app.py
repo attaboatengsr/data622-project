@@ -1,21 +1,50 @@
 import numpy as np
+
 import matplotlib.pyplot as plt
 import pandas as pd
 
 from functools import partial
-from shiny import render
-from shiny.express import input, ui
+from shiny.express import input, ui, render
 from shiny.ui import page_navbar
 
-#ui.page_opts(
-#    title="Energy Cost Estimator",
-#    page_fn=partial(page_navbar, id="page")
-#)
 
 with ui.nav_panel("Energy Cost Estimator"):
     with ui.layout_columns():
-        ui.value_box(title="Monthly Cost", value="$120")
-        ui.value_box(title="Energy Usage", value="350 kWh", theme="bg-primary")
+        ui.input_text("ppn","Amount of people")
+        ui.input_select("borough","Borough",{"Bronx":"Bronx","Queens":"Queens","Manhattan":"Manhattan","Brooklyn":"Brooklyn","Staten Island": "Staten Island"})
+        ui.input_select("month",
+                        "Month",
+                        {"January":"January",
+                         "February":"February",
+                         "March":"March",
+                         "April":"April",
+                         "May":"May",
+                         "June":"June",
+                         "July":"July",
+                         "August":"August",
+                         "September":"September",
+                         "October":"October",
+                         "November":"November",
+                         "December":"December"
+
+                         }
+                        )
+    with ui.layout_columns():
+        @render.ui
+        def monthly_cost_value():
+            return ui.value_box(
+                    title="Monthly Cost",
+                    value=input.borough()
+                    )
+
+        @render.ui
+        def estimate_cost_value():
+            return ui.value_box(
+                    title="Estimated Energy Cost",
+                    value=input.ppn()
+                    )
+        #ui.value_box(title="Monthly Cost", value=input.borough())
+        #ui.value_box(title="Energy Usage", value="350 kWh", theme="bg-primary")
 
     with ui.card():
         ui.card_header("Energy Usage Plot")
@@ -33,8 +62,4 @@ with ui.nav_panel("Energy Cost Estimator"):
             ax.set_ylabel("kWh")
             return fig
 
-        ui.input_file("file_upload", "Choose CSV File", accept=[".csv"])
-        @render.text
-        def show_info():
-            return input.file_upload()
 
