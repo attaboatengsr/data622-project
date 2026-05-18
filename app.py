@@ -1,7 +1,6 @@
+import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
-import pandas as pd
-
 from shiny.express import input, ui, render
 from sklearn.preprocessing import LabelEncoder
 
@@ -26,41 +25,28 @@ def model(borough, month, amount_of_people=0):
     if amount_of_people == 0:
         return 0.0
 
-    try:
-        borough_encoded = le.transform([borough.upper().strip()])[0]
-    except ValueError:
-        raise ValueError(f"Borough must be one of: {list(le.classes_)}")
+    borough_encoded = le.transform([borough.upper().strip()])[0]
 
     sin_month = np.sin(2 * np.pi * month / 12)
     cos_month = np.cos(2 * np.pi * month / 12)
 
     raw_features = np.array([sin_month, cos_month, float(borough_encoded)])
-
     standardized_features = (raw_features - means) / std_devs
-    predicted_log_y = beta_0 + np.dot(beta, standardized_features)
 
+    predicted_log_y = beta_0 + np.dot(beta, standardized_features)
     base_cost_per_person = np.expm1(predicted_log_y)
     base_cost_per_person = max(0.0, base_cost_per_person)
 
-    total_household_bill = base_cost_per_person * amount_of_people
-
-    return total_household_bill
+    return base_cost_per_person * amount_of_people
 
 
-# Shared month map
+# -----------------------------
+#  MONTH MAP
+# -----------------------------
 MONTH_MAP = {
-    "January": 1,
-    "February": 2,
-    "March": 3,
-    "April": 4,
-    "May": 5,
-    "June": 6,
-    "July": 7,
-    "August": 8,
-    "September": 9,
-    "October": 10,
-    "November": 11,
-    "December": 12,
+    "January": 1, "February": 2, "March": 3, "April": 4,
+    "May": 5, "June": 6, "July": 7, "August": 8,
+    "September": 9, "October": 10, "November": 11, "December": 12,
 }
 
 
@@ -69,95 +55,92 @@ MONTH_MAP = {
 # -----------------------------
 with ui.nav_panel("Energy Cost Estimator"):
 
+    # INPUTS
     with ui.layout_columns():
         ui.input_text("ppn", "Amount of people")
-        ui.input_select(
-            "borough",
-            "Borough",
-            {
-                "Bronx": "Bronx",
-                "Queens": "Queens",
-                "Manhattan": "Manhattan",
-                "Brooklyn": "Brooklyn",
-                "Staten Island": "Staten Island",
-            },
-        )
-        ui.input_select(
-            "month",
-            "Month",
-            {m: m for m in MONTH_MAP.keys()},
-        )
+        ui.input_select("borough", "Borough", {
+            "Bronx": "Bronx",
+            "Queens": "Queens",
+            "Manhattan": "Manhattan",
+            "Brooklyn": "Brooklyn",
+            "Staten Island": "Staten Island",
+        })
+        ui.input_select("month", "Month", {m: m for m in MONTH_MAP})
 
-    # -----------------------------
-    #  VALUE BOXES
-    # -----------------------------
+    # VALUE BOXES
     with ui.layout_columns():
 
         @render.ui
         def monthly_cost_value():
-            # Convert people input safely
             try:
                 people = int(input.ppn())
-            except Exception:
-                return ui.value_box(
-                    title="Monthly Cost",
-                    value="",
-                )
+            except:
+                return ui.value_box(title="Monthly Cost", value="")
 
             month_num = MONTH_MAP[input.month()]
-
-            calculated_cost = model(
-                borough=input.borough(),
-                month=month_num,
-                amount_of_people=people,
-            )
+            cost = model(input.borough(), month_num, people)
 
             return ui.value_box(
                 title="Monthly Cost",
-                value=f"${calculated_cost:,.2f}",
+                value=f"${cost:,.2f}"
             )
 
         @render.ui
         def estimate_cost_value():
-            # Same safety for people input
             try:
                 people = int(input.ppn())
-            except Exception:
-                return ui.value_box(
-                    title="Estimated Energy Usage",
-                    value="",
-                )
+            except:
+                return ui.value_box(title="Estimated Energy Usage", value="")
 
-            cost_rate = 0.16402  # dollars per kWh (or your chosen unit)
+            cost_rate = 0.16402
             month_num = MONTH_MAP[input.month()]
-
-            calculated_cost = model(
-                borough=input.borough(),
-                month=month_num,
-                amount_of_people=people,
-            )
-
-            usage = calculated_cost / cost_rate
+            cost = model(input.borough(), month_num, people)
+            usage = cost / cost_rate
 
             return ui.value_box(
                 title="Estimated Energy Usage",
-                value=f"{usage:,.0f} kWh",
+                value=f"{usage:,.0f} kWh"
             )
 
     # -----------------------------
-    #  PLOT
+    #  MONTHLY USAGE PLOT
     # -----------------------------
     with ui.card():
-        ui.card_header("Energy Usage Plot")
+        ui.card_header("Estimated Monthly Energy Usage")
 
         @render.plot
-        def energy_plot():
-            y = np.random.default_rng().integers(low=0, high=100, size=100)
-            x = np.arange(100)
+        def monthly_usage_plot():
+            # --- Convert people input safely ---
+            try:
+                people = int(input.ppn())
+            except Exception:
+                fig, ax = plt.subplots()
+                ax.text(0.5, 0.5, "Enter a valid number of people", ha="center")
+                ax.axis("off")
+                return fig
 
-            fig, ax = plt.subplots()
-            ax.plot(x, y)
-            ax.set_title("Electric Usage This Month")
-            ax.set_xlabel("Time")
-            ax.set_ylabel("Usage Level")
+            borough = input.borough()
+            month_num = MONTH_MAP[input.month()]
+
+            # --- Compute estimated monthly usage ---
+            cost_rate = 0.16402  # dollars per kWh
+            monthly_cost = model(borough, month_num, people)   # ← FIXED
+            monthly_usage_kwh = monthly_cost / cost_rate
+
+            # --- Create daily usage curve ---
+            days = np.arange(1, 31)
+            rng = np.random.default_rng(seed=month_num + people)
+
+            daily_usage = (monthly_usage_kwh / 30) * (1 + rng.normal(0, 0.05, size=30))
+
+            # --- Plot ---
+            fig, ax = plt.subplots(figsize=(8, 4))
+            ax.plot(days, daily_usage, marker="o", linewidth=2, color="tab:blue")
+
+            ax.set_title(f"Estimated Energy Usage for {input.month()} ({borough})")
+            ax.set_xlabel("Day of Month")
+            ax.set_ylabel("kWh per Day")
+            ax.grid(True, alpha=0.3)
+
             return fig
+
