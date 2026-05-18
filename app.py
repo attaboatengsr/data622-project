@@ -6,7 +6,45 @@ import pandas as pd
 from functools import partial
 from shiny.express import input, ui, render
 from shiny.ui import page_navbar
+from sklearn.preprocessing import LabelEncoder
 
+def model(amount_of_people, borough, month):
+
+    intercept = 2.555903559111899
+    b1 = 0.032631  #associated with borough encoded
+    b2 = -0.072184 #associated with cos_month
+    b3 = -0.131015 #associated with sin_month
+    b4 = -0.053463 #associated with month_num
+    b5 = 0.386717  #associated with KWH per person
+
+    # 1. FIX: Wrap borough in a list [borough] so fit_transform gets a 1D array
+    le = LabelEncoder()
+    # Pre-populate categories so encoding works reliably for a single input
+    le.fit(["Bronx", "Queens", "Manhattan", "Brooklyn", "Staten Island"])
+    borough_encoded = le.transform([borough])[0]
+
+    # 2. FIX: Convert the month string to a number using a dictionary instead of .dt.month
+    month_mapping = {
+        "January": 1, "February": 2, "March": 3, "April": 4, "May": 5, "June": 6,
+        "July": 7, "August": 8, "September": 9, "October": 10, "November": 11, "December": 12
+    }
+    month_num = month_mapping[month]
+
+    # processing for cos_month
+    cos_month = np.cos(2 * np.pi * month_num / 12)
+
+    # processing for sin_month
+    sin_month = np.sin(2 * np.pi * month_num / 12)
+    
+    cost_per_person = intercept + (b1 * borough_encoded) + (b2 * cos_month) + (b3 * sin_month) + (b4 * month_num)
+    
+    # Avoid errors if input.ppn() is empty or not a number yet
+    try:
+        people_count = int(amount_of_people)
+    except (ValueError, TypeError):
+        people_count = 0
+        
+    return cost_per_person * people_count
 
 with ui.nav_panel("Energy Cost Estimator"):
     with ui.layout_columns():
@@ -32,19 +70,19 @@ with ui.nav_panel("Energy Cost Estimator"):
     with ui.layout_columns():
         @render.ui
         def monthly_cost_value():
+            calculated_cost = model(input.ppn(), input.borough(), input.month())
             return ui.value_box(
                     title="Monthly Cost",
-                    value=input.borough()
+                    value=f"${calculated_cost:,.2f}"
                     )
 
         @render.ui
         def estimate_cost_value():
+            ppn = input.ppn()
             return ui.value_box(
-                    title="Estimated Energy Cost",
-                    value=input.ppn()
+                    title="Estimated Energy Usage",
+                    value=ppn
                     )
-        #ui.value_box(title="Monthly Cost", value=input.borough())
-        #ui.value_box(title="Energy Usage", value="350 kWh", theme="bg-primary")
 
     with ui.card():
         ui.card_header("Energy Usage Plot")
@@ -59,7 +97,7 @@ with ui.nav_panel("Energy Cost Estimator"):
             ax.plot(x, y)
             ax.set_title("Electric Usage This Month")
             ax.set_xlabel("Time")
-            ax.set_ylabel("kWh")
+            ax.set_ylabel("Temperature")
             return fig
 
 
