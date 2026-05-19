@@ -57,7 +57,7 @@ with ui.nav_panel("Energy Cost Estimator"):
 
     # INPUTS
     with ui.layout_columns():
-        ui.input_text("ppn", "Amount of people")
+        ui.input_text("ppn", "Household size")
         ui.input_select("borough", "Borough", {
             "Bronx": "Bronx",
             "Queens": "Queens",
